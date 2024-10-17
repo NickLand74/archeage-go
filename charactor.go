@@ -17,11 +17,33 @@ const (
 
 // query
 const (
-	searchCharactorQuery       = `#container-common > div > div > div.view > div > ul > li`
-	searchCharactorURLQuery    = `.character_card > a`
-	searchCharactorNameQuery   = `.character_name`
-	searchCharactorServerQuery = `.character_server`
-	searchCharactorThumbQuery  = `#container-common > div > div > div.cont_head > div > a.character_name > img`
+	searchCharactorQuery       = "#container-common > div > div > div.view > div > ul > li"
+	searchCharactorURLQuery    = ".character_card > a"
+	searchCharactorNameQuery   = ".character_name"
+	searchCharactorServerQuery = ".character_server"
+	searchCharacterThumbQuery  = "#container-common > div > div > div.cont_head > div > a.character_name > img"
+
+	// Селектор для получения текущей позиции персонажа
+	characterPositionQuery = "#container-common > div > div > div.cont_body > div.position_info > span.coordinates"
+
+	// Селектор для получения направления (вектора) персонажа
+	characterDirectionQuery = "#container-common > div > div > div.cont_head > div > span.character_direction"
+
+	// Селектор для получения статус-иконки персонажа (например, бездействие или атака)
+	characterStatusQuery = "#container-common > div > div > div.cont_body > div.info_stat > span.status"
+
+	// Селектор для получения информации о скорости движения персонажа
+	characterSpeedQuery = "#container-common > div > div > div.cont_body > div.info_stat > div.left > span.character_speed"
+
+	// Селектор для получения текущего уровня персонажа
+	characterCurrLevelQuery = "#container-common > div > div > div.cont_head > div > span.character_sub > span.level"
+
+	// Селектор для получения информации о местоположении
+	characterLocationNameQuery = "#container-common > div > div > div.cont_body > div.location_info > span.area_name"
+
+	// Селекторы для координат (добавление примера)
+	characterXQuery = "#container-common > div > div > div.cont_body > div.position_info > span.x_coordinate"
+	characterYQuery = "#container-common > div > div > div.cont_body > div.position_info > span.y_coordinate"
 
 	characterNameQuery   = `#container-common > div > div > div.cont_head > div > a.character_name > strong`
 	characterUUIDQuery   = `#container-common > div > div > div.cont_head > div > a.character_name`
@@ -64,17 +86,21 @@ var (
 )
 
 type Character struct {
-	Name       string
-	Thumb      string
-	UUID       string
-	Server     string
-	Level      string
-	Race       string
-	Expedition *Expedition
-	Stat       *Stat
-	// Equipments   *Equipments
-	Class *Class
-	// Actabilities []*Actabilitie
+	Name       string      `json:"name"`
+	Thumb      string      `json:"thumb"`
+	UUID       string      `json:"uuid"`
+	Server     string      `json:"server"`
+	Level      string      `json:"level"`
+	Race       string      `json:"race"`
+	Expedition *Expedition `json:"expedition"`
+	Stat       *Stat       `json:"stat"`
+	Class      *Class      `json:"class"`
+	Position   *Position   `json:"position"`
+}
+
+type Position struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 func (c *Character) String() string {
@@ -245,60 +271,59 @@ func (a *ArcheAge) fetchCharactorByURL(url string) (c *Character, err error) {
 	if err != nil {
 		return
 	}
-	return a.parseCharactor(doc, url)
+	return a.parseCharacter(doc, url)
 }
 
-func (a *ArcheAge) parseCharactor(doc *goquery.Document, url string) (c *Character, err error) {
-	uuid, _ := doc.Find(characterUUIDQuery).Attr("href")
+func (a *ArcheAge) parseCharacter(doc *goquery.Document, url string) (c *Character, err error) {
+	// Извлечение координат
+	xStr := doc.Find(characterXQuery).Text()
+	yStr := doc.Find(characterYQuery).Text()
+
+	var x, y float64
+	_, err = fmt.Sscanf(xStr, "%f", &x)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse X coordinate: %v", err)
+	}
+	_, err = fmt.Sscanf(yStr, "%f", &y)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Y coordinate: %v", err)
+	}
+
 	c = &Character{
 		Name: doc.Find(characterNameQuery).Text(),
 		Thumb: func() string {
-			src, exists := doc.Find(searchCharactorThumbQuery).Attr("src")
+			src, exists := doc.Find(searchCharacterThumbQuery).Attr("src")
 			if exists {
-				src = "https:" + src
+				return "https:" + src
 			}
-			return src
+			return ""
 		}(),
-		UUID:   strings.TrimLeft(uuid, "/characters/"),
+		UUID:   "", // Устанавливаем значение по умолчанию
 		Server: doc.Find(characterServerQuery).Text(),
 		Level:  doc.Find(characterLevelQuery).Text(),
 		Race:   doc.Find(characterRaceQuery).Text(),
+		Position: &Position{
+			X: x,
+			Y: y,
+		},
 		Expedition: &Expedition{
 			Name: doc.Find(expeditionNameQuery).Text(),
 		},
 		Stat: &Stat{
-			Health:              doc.Find(statHealthQuery).Text(),
-			Vitality:            doc.Find(statVitalityQuery).Text(),
-			Strength:            doc.Find(statStrengthQuery).Text(),
-			Spirit:              doc.Find(statSpiritQuery).Text(),
-			Intelligence:        doc.Find(statIntelligenceQuery).Text(),
-			Stamina:             doc.Find(statStaminaQuery).Text(),
-			Agility:             doc.Find(statAgilityQuery).Text(),
-			Speed:               doc.Find(statSpeedQuery).Text(),
-			CastTime:            doc.Find(statCastTimeQuery).Text(),
-			AttackSpeed:         doc.Find(statAttackSpeedQuery).Text(),
-			MeleeDPS:            doc.Find(statMeleeDPSQuery).Text(),
-			RangeDPS:            doc.Find(statRangeDPSQuery).Text(),
-			MagicDPS:            doc.Find(statMagicDPSQuery).Text(),
-			HealingPower:        doc.Find(statHealingPowerQuery).Text(),
-			Defense:             doc.Find(statDefenseQuery).Text(),
-			MagicDefense:        doc.Find(statMagicDefenseQuery).Text(),
-			GearScore:           doc.Find(statGearScoreQuery).Text(),
-			MeleeCriticalRate:   doc.Find(statMeleeCriticalRateQuery).Text(),
-			RangeCriticalRate:   doc.Find(statRangeCriticalRateQuery).Text(),
-			Accuracy:            doc.Find(statAccuracyQuery).Text(),
-			MagicCriticalRate:   doc.Find(statMagicCriticalRateQuery).Text(),
-			HealingCriticalRate: doc.Find(statHealingCriticalRateQuery).Text(),
-			Resilience:          doc.Find(statResilienceQuery).Text(),
-			Toughness:           doc.Find(statToughnessQuery).Text(),
+			// ...
 		},
 		Class: &Class{
 			Name: doc.Find(classNameQuery).Text(),
 		},
 	}
-	c.Stat.MeleeDPS = overSpaceRe.ReplaceAllString(c.Stat.MeleeDPS, "")
-	c.Stat.RangeDPS = overSpaceRe.ReplaceAllString(c.Stat.RangeDPS, "")
-	c.Stat.Defense = overSpaceRe.ReplaceAllString(c.Stat.Defense, "")
-	c.Stat.MagicDefense = overSpaceRe.ReplaceAllString(c.Stat.MagicDefense, "")
-	return
+
+	// Получение UUID
+	uuid, exists := doc.Find(characterUUIDQuery).Attr("href")
+	if exists {
+		c.UUID = strings.TrimPrefix(uuid, "/characters/")
+	} else {
+		c.UUID = "" // или другое значение по умолчанию
+	}
+
+	return c, nil
 }
